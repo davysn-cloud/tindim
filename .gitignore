@@ -11,6 +11,9 @@ venv/
 dist/
 build/
 
+# Permitir static/dist (Frontend Buildado)
+!static/dist/
+
 # Environment
 .env
 .env.local

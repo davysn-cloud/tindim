@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 class SignupRequest(BaseModel):
     email: EmailStr
     password: str
+    phone_number: str  # Número do WhatsApp para receber notícias
     name: str
     interests: List[str] = ["economy", "politics"]
     plan: str = "generalista"
@@ -31,6 +32,7 @@ class UserResponse(BaseModel):
     id: str
     email: str
     name: str
+    phone_number: Optional[str]
     interests: List[str]
     plan: str
     subscription_status: str
@@ -99,7 +101,7 @@ async def get_current_user(request: Request) -> dict:
 
 @router.post("/signup", response_model=AuthResponse)
 async def signup(data: SignupRequest, response: Response):
-    """Cria uma nova conta de usuário"""
+    """Cria uma nova conta de usuário e subscriber para WhatsApp"""
     try:
         # Verifica se email já existe
         existing = supabase.table("users")\
@@ -110,7 +112,48 @@ async def signup(data: SignupRequest, response: Response):
         if existing.data:
             raise HTTPException(status_code=400, detail="Email already registered")
         
-        # Cria o usuário
+        # Verifica se telefone já existe
+        existing_phone = supabase.table("subscribers")\
+            .select("id")\
+            .eq("phone_number", data.phone_number)\
+            .execute()
+        
+        if existing_phone.data:
+            raise HTTPException(status_code=400, detail="Phone number already registered")
+        
+        # Mapeia interesses do frontend para categorias do backend
+        interest_mapping = {
+            "politics": "POLITICS",
+            "economy": "FINANCE",
+            "tech": "TECH",
+            "business": "BUSINESS",
+            "markets": "FINANCE",
+            "agro": "AGRO",
+            "health": "HEALTH",
+            "culture": "ENTERTAINMENT"
+        }
+        mapped_interests = [interest_mapping.get(i, i.upper()) for i in data.interests]
+        
+        # 1. Cria o subscriber (para receber WhatsApp)
+        subscriber_data = {
+            "phone_number": data.phone_number,
+            "email": data.email,
+            "name": data.name,
+            "interests": mapped_interests,
+            "plan": data.plan,
+            "is_active": True,
+            "daily_message_count": 0,
+            "daily_ai_count": 0
+        }
+        
+        subscriber_response = supabase.table("subscribers").insert(subscriber_data).execute()
+        
+        if not subscriber_response.data:
+            raise HTTPException(status_code=500, detail="Failed to create subscriber")
+        
+        subscriber = subscriber_response.data[0]
+        
+        # 2. Cria o usuário (para login web)
         password_hash = hash_password(data.password)
         trial_ends = datetime.now(timezone.utc) + timedelta(days=5)
         
@@ -118,20 +161,24 @@ async def signup(data: SignupRequest, response: Response):
             "email": data.email,
             "password_hash": password_hash,
             "name": data.name,
-            "interests": data.interests,
+            "phone_number": data.phone_number,
+            "interests": mapped_interests,
             "plan": data.plan,
             "subscription_status": "trialing",
-            "trial_ends_at": trial_ends.isoformat()
+            "trial_ends_at": trial_ends.isoformat(),
+            "subscriber_id": subscriber["id"]  # Vincula ao subscriber
         }
         
         user_response = supabase.table("users").insert(user_data).execute()
         
         if not user_response.data:
+            # Rollback: remove subscriber se falhar criar user
+            supabase.table("subscribers").delete().eq("id", subscriber["id"]).execute()
             raise HTTPException(status_code=500, detail="Failed to create user")
         
         user = user_response.data[0]
         
-        # Cria sessão
+        # 3. Cria sessão
         token = generate_session_token()
         expires_at = datetime.now(timezone.utc) + timedelta(days=7)
         
@@ -151,13 +198,14 @@ async def signup(data: SignupRequest, response: Response):
             max_age=60 * 60 * 24 * 7  # 7 dias
         )
         
-        logger.info(f"Novo usuário criado: {data.email}")
+        logger.info(f"Novo usuário criado: {data.email} (WhatsApp: {data.phone_number})")
         
         return AuthResponse(
             user=UserResponse(
                 id=user["id"],
                 email=user["email"],
                 name=user["name"],
+                phone_number=user.get("phone_number"),
                 interests=user["interests"],
                 plan=user["plan"],
                 subscription_status=user["subscription_status"],
@@ -225,6 +273,7 @@ async def login(data: LoginRequest, response: Response):
                 id=user["id"],
                 email=user["email"],
                 name=user["name"],
+                phone_number=user.get("phone_number"),
                 interests=user["interests"],
                 plan=user["plan"],
                 subscription_status=user["subscription_status"],
@@ -261,6 +310,7 @@ async def get_me(user: dict = Depends(get_current_user)):
         id=user["id"],
         email=user["email"],
         name=user["name"],
+        phone_number=user.get("phone_number"),
         interests=user["interests"],
         plan=user["plan"],
         subscription_status=user["subscription_status"],
@@ -298,6 +348,7 @@ async def update_me(
         id=user["id"],
         email=user["email"],
         name=user["name"],
+        phone_number=user.get("phone_number"),
         interests=user["interests"],
         plan=user["plan"],
         subscription_status=user["subscription_status"],

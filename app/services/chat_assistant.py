@@ -24,9 +24,16 @@ class ChatAssistantService:
         # 1. Buscar ou criar assinante
         subscriber = await self._get_or_create_subscriber(phone_number)
         
-        # 2. Verificar limite diário de mensagens
+        # 2. Verificar limite diário de IA
+        plan = subscriber.get("plan", "generalista")
         if not await self._check_daily_limit(subscriber):
-            return "Você atingiu o limite de conversas por hoje. Volte amanhã para mais interações! 😊"
+            if plan == "generalista":
+                return (
+                    "Você atingiu o limite de interações com IA por hoje (10/dia no plano Generalista). 😊\n\n"
+                    "💡 *Dica:* Faça upgrade para o plano *Estrategista* e tenha 30 interações/dia!\n"
+                    "Volte amanhã para mais conversas!"
+                )
+            return "Você atingiu o limite de interações com IA por hoje. Volte amanhã para mais conversas! 😊"
         
         # 3. Buscar ou criar conversa ativa
         conversation = await self._get_or_create_conversation(subscriber["id"])
@@ -92,34 +99,42 @@ class ChatAssistantService:
         return result.data[0]
 
     async def _check_daily_limit(self, subscriber: Dict) -> bool:
-        """Verifica se o usuário ainda tem mensagens disponíveis no dia"""
+        """Verifica se o usuário ainda tem uso de IA disponível no dia (por plano)"""
+        from datetime import timezone
+        
         # Reset diário do contador
         last_reset = subscriber.get("last_reset_at")
         if last_reset:
-            from datetime import timezone
             last_reset_date = datetime.fromisoformat(last_reset.replace('Z', '+00:00'))
             now_utc = datetime.now(timezone.utc)
             if (now_utc - last_reset_date).days >= 1:
-                # Resetar contador
+                # Resetar contadores
                 supabase.table("subscribers")\
                     .update({
                         "daily_message_count": 0,
+                        "daily_ai_count": 0,
                         "last_reset_at": datetime.utcnow().isoformat()
                     })\
                     .eq("id", subscriber["id"])\
                     .execute()
                 return True
         
-        # Verificar limite (pode ajustar conforme necessário)
-        daily_limit = 50  # Limite de mensagens por dia
-        current_count = subscriber.get("daily_message_count", 0)
+        # Limites por plano
+        plan = subscriber.get("plan", "generalista")
+        if plan == "estrategista":
+            daily_ai_limit = 30  # Estrategista: 30 interações IA/dia
+        else:
+            daily_ai_limit = 10  # Generalista: 10 interações IA/dia
         
-        if current_count >= daily_limit:
+        current_ai_count = subscriber.get("daily_ai_count", 0)
+        
+        if current_ai_count >= daily_ai_limit:
+            logger.info(f"Limite de IA atingido para {subscriber['phone_number']} (plano: {plan})")
             return False
         
-        # Incrementar contador
+        # Incrementar contador de IA
         supabase.table("subscribers")\
-            .update({"daily_message_count": current_count + 1})\
+            .update({"daily_ai_count": current_ai_count + 1})\
             .eq("id", subscriber["id"])\
             .execute()
         

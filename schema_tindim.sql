@@ -25,7 +25,9 @@ create table if not exists public.subscribers (
     name text not null,
     is_active boolean default true,
     interests jsonb default '["TECH", "FINANCE"]'::jsonb, -- Tópicos que o usuário escolheu
+    plan text default 'generalista' check (plan in ('generalista', 'estrategista')), -- Plano do usuário
     daily_message_count integer default 0, -- Contador de mensagens do dia
+    daily_ai_count integer default 0, -- Contador de uso de IA do dia
     last_reset_at timestamp with time zone default now(), -- Última vez que resetou o contador
     created_at timestamp with time zone default now()
 );

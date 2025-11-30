@@ -17,7 +17,7 @@ class WhatsAppService:
         }
 
     async def broadcast_digest(self):
-        """Envia resumos de notícias personalizados por tópico para cada usuário"""
+        """Envia resumos de notícias personalizados - UMA MENSAGEM POR TÓPICO"""
         logger.info("Iniciando broadcast personalizado via WhatsApp...")
         
         # 1. Buscar notícias processadas nas últimas 24 horas
@@ -58,43 +58,129 @@ class WhatsAppService:
                     if not isinstance(interests, list):
                         interests = ["TECH", "FINANCE"]
                     
-                    # Filtrar artigos relevantes para este usuário
-                    relevant_articles = []
-                    for interest in interests:
-                        if interest in articles_by_category:
-                            relevant_articles.extend(articles_by_category[interest])
+                    # Verificar limite de mensagens do plano
+                    plan = sub.get("plan", "generalista")
+                    daily_limit = 10 if plan == "estrategista" else 5
+                    current_count = sub.get("daily_message_count", 0)
                     
-                    if not relevant_articles:
-                        logger.info(f"Nenhuma notícia relevante para {sub['phone_number']}")
+                    if current_count >= daily_limit:
+                        logger.info(f"Limite diário atingido para {sub['phone_number']}")
                         continue
                     
-                    # Montar mensagem personalizada
-                    messages = self._build_personalized_messages(sub["name"], relevant_articles, interests)
+                    # Enviar mensagem de boas-vindas
+                    welcome_msg = self._build_welcome_message(sub["name"])
+                    await self._send_message(client, sub["phone_number"], welcome_msg)
+                    await asyncio.sleep(1.0)
                     
-                    # Enviar mensagens
-                    for msg_part in messages:
-                        payload = {
-                            "messaging_product": "whatsapp",
-                            "to": sub["phone_number"],
-                            "type": "text",
-                            "text": {"body": msg_part}
-                        }
+                    messages_sent = 0
+                    
+                    # Enviar UMA MENSAGEM POR TÓPICO
+                    for interest in interests:
+                        if interest not in articles_by_category:
+                            continue
                         
-                        r = await client.post(self.base_url, headers=self.headers, json=payload)
-                        if r.status_code not in [200, 201]:
-                            logger.error(f"Falha ao enviar para {sub['phone_number']}: {r.text}")
-                        else:
-                            logger.info(f"Enviado para {sub['phone_number']}")
+                        if current_count + messages_sent >= daily_limit:
+                            logger.info(f"Limite atingido para {sub['phone_number']}")
+                            break
                         
-                        await asyncio.sleep(1.0)
+                        # Monta mensagem para este tópico
+                        topic_message = self._build_topic_message(
+                            interest, 
+                            articles_by_category[interest]
+                        )
+                        
+                        success = await self._send_message(client, sub["phone_number"], topic_message)
+                        if success:
+                            messages_sent += 1
+                        
+                        await asyncio.sleep(1.5)  # Delay entre mensagens
+                    
+                    # Atualiza contador de mensagens
+                    if messages_sent > 0:
+                        supabase.table("subscribers")\
+                            .update({"daily_message_count": current_count + messages_sent})\
+                            .eq("id", sub["id"])\
+                            .execute()
+                        logger.info(f"Enviadas {messages_sent} mensagens para {sub['phone_number']}")
                     
                 except Exception as e:
                     logger.error(f"Erro no envio para {sub['phone_number']}: {e}")
 
         logger.info("Broadcast finalizado.")
 
+    def _build_welcome_message(self, user_name: str) -> str:
+        """Mensagem de boas-vindas do dia"""
+        return (
+            f"📱 *Tindim* - {datetime.now().strftime('%d/%m/%Y')}\n\n"
+            f"Bom dia, *{user_name}*! ☀️\n\n"
+            f"Aqui estão suas notícias personalizadas de hoje. "
+            f"Cada tópico será enviado em uma mensagem separada para facilitar a leitura.\n\n"
+            f"💬 _Responda qualquer mensagem para saber mais!_"
+        )
+
+    def _build_topic_message(self, category: str, articles: List[Dict]) -> str:
+        """Constrói UMA mensagem para UM tópico específico"""
+        # Emoji por categoria
+        category_emojis = {
+            "TECH": "💻",
+            "AGRO": "🌾",
+            "CRYPTO": "₿",
+            "FINANCE": "💰",
+            "BUSINESS": "📊",
+            "POLITICS": "🏛️",
+            "SPORTS": "⚽",
+            "ENTERTAINMENT": "🎬",
+            "HEALTH": "🏥",
+            "SCIENCE": "🔬",
+            "GERAL": "📰"
+        }
+        
+        emoji = category_emojis.get(category, "📰")
+        msg = f"{emoji} *{category}*\n\n"
+        
+        # Limita a 3 artigos por tópico
+        for article in articles[:3]:
+            summary = article.get("summary_json", {})
+            if not isinstance(summary, dict):
+                summary = {}
+
+            headline = summary.get("headline", article["title"])
+            points = summary.get("bullet_points", [])
+            if not isinstance(points, list):
+                points = [str(points)]
+                
+            sentiment = summary.get("sentiment", "NEUTRO")
+            icon = "🟢" if sentiment == "POSITIVO" else "🔴" if sentiment == "NEGATIVO" else "⚪"
+            
+            msg += f"{icon} *{headline}*\n"
+            for p in points[:2]:  # Limita a 2 pontos por artigo
+                msg += f"• {p}\n"
+            msg += "\n"
+        
+        msg += f"_🤖 Gerado por IA via Tindim_"
+        return msg
+
+    async def _send_message(self, client: httpx.AsyncClient, phone_number: str, message: str) -> bool:
+        """Envia uma mensagem via WhatsApp"""
+        try:
+            payload = {
+                "messaging_product": "whatsapp",
+                "to": phone_number,
+                "type": "text",
+                "text": {"body": message}
+            }
+            
+            r = await client.post(self.base_url, headers=self.headers, json=payload)
+            if r.status_code not in [200, 201]:
+                logger.error(f"Falha ao enviar para {phone_number}: {r.text}")
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Erro ao enviar mensagem: {e}")
+            return False
+
     def _build_personalized_messages(self, user_name: str, articles: List[Dict], interests: List[str]) -> List[str]:
-        """Constrói mensagens personalizadas agrupadas por tópico"""
+        """Constrói mensagens personalizadas agrupadas por tópico (LEGADO)"""
         messages = []
         
         # Cabeçalho
