@@ -13,3 +13,4 @@ tenacity>=8.2.3
 python-dateutil>=2.8.2
 elevenlabs>=0.2.27
 email-validator>=2.1.0
+stripe>=7.0.0
