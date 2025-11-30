@@ -181,22 +181,36 @@ async def stripe_webhook(
 # --- Event Handlers ---
 
 async def handle_checkout_completed(session: dict):
-    """Processa checkout completado"""
+    """Processa checkout completado - Atualiza user E subscriber"""
     user_id = session.get("metadata", {}).get("user_id")
+    plan = session.get("metadata", {}).get("plan", "generalista")
     subscription_id = session.get("subscription")
     customer_id = session.get("customer")
     
     if user_id and subscription_id:
-        supabase.table("users")\
+        # 1. Atualiza o user
+        user_response = supabase.table("users")\
             .update({
                 "stripe_subscription_id": subscription_id,
                 "stripe_customer_id": customer_id,
-                "subscription_status": "trialing"
+                "subscription_status": "trialing",
+                "plan": plan
             })\
             .eq("id", user_id)\
             .execute()
         
-        logger.info(f"Checkout completado para user {user_id}")
+        # 2. Atualiza o subscriber vinculado (para WhatsApp)
+        if user_response.data:
+            user = user_response.data[0]
+            subscriber_id = user.get("subscriber_id")
+            if subscriber_id:
+                supabase.table("subscribers")\
+                    .update({"plan": plan})\
+                    .eq("id", subscriber_id)\
+                    .execute()
+                logger.info(f"Subscriber {subscriber_id} atualizado para plano {plan}")
+        
+        logger.info(f"Checkout completado para user {user_id} - Plano: {plan}")
 
 async def handle_subscription_created(subscription: dict):
     """Processa nova assinatura"""
@@ -222,7 +236,7 @@ async def handle_subscription_created(subscription: dict):
         logger.info(f"Assinatura criada para user {user_id}: {status}")
 
 async def handle_subscription_updated(subscription: dict):
-    """Processa atualização de assinatura"""
+    """Processa atualização de assinatura - Sincroniza user E subscriber"""
     customer_id = subscription.get("customer")
     status = subscription.get("status")
     plan = subscription.get("metadata", {}).get("plan")
@@ -231,12 +245,23 @@ async def handle_subscription_updated(subscription: dict):
     if plan:
         update_data["plan"] = plan
     
-    supabase.table("users")\
+    # 1. Atualiza o user
+    user_response = supabase.table("users")\
         .update(update_data)\
         .eq("stripe_customer_id", customer_id)\
         .execute()
     
-    logger.info(f"Assinatura atualizada para customer {customer_id}: {status}")
+    # 2. Sincroniza o subscriber se o plano mudou
+    if plan and user_response.data:
+        user = user_response.data[0]
+        subscriber_id = user.get("subscriber_id")
+        if subscriber_id:
+            supabase.table("subscribers")\
+                .update({"plan": plan})\
+                .eq("id", subscriber_id)\
+                .execute()
+    
+    logger.info(f"Assinatura atualizada para customer {customer_id}: {status} (plano: {plan})")
 
 async def handle_subscription_deleted(subscription: dict):
     """Processa cancelamento de assinatura"""
