@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-br" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InsightFlow Finance - Inteligência Financeira no WhatsApp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="//unpkg.com/alpinejs" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            dark: '#0F172A',
+                            primary: '#3B82F6',
+                            accent: '#F97316', // Laranja tipo bitcoin do print
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .gradient-text {
+            background: linear-gradient(to right, #F97316, #EAB308);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased overflow-x-hidden">
+
+    <!-- Hero Section -->
+    <section class="relative pt-20 pb-32 bg-white overflow-hidden">
+        <div class="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
+            <div class="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] rounded-full bg-orange-100 blur-3xl opacity-50"></div>
+            <div class="absolute top-[20%] -left-[10%] w-[40%] h-[40%] rounded-full bg-blue-100 blur-3xl opacity-50"></div>
+        </div>
+
+        <div class="container mx-auto px-6 relative z-10 text-center">
+            <div class="inline-block px-4 py-1.5 mb-6 rounded-full bg-slate-100 border border-slate-200 text-sm font-semibold text-slate-600">
+                🚀 O futuro da informação financeira
+            </div>
+            <h1 class="text-5xl md:text-7xl font-bold tracking-tight mb-6 text-slate-900">
+                Reimagine sua <br>
+                <span class="gradient-text">Inteligência Financeira</span>
+            </h1>
+            <p class="text-xl text-slate-600 mb-10 max-w-2xl mx-auto">
+                Receba resumos de mercado gerados por IA diretamente no seu WhatsApp. Ações, FIIs e Macroeconomia sem ruído, duas vezes ao dia.
+            </p>
+            
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <a href="#subscribe" class="px-8 py-4 rounded-full bg-gradient-to-r from-orange-500 to-yellow-500 text-white font-bold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition duration-300">
+                    Começar Agora
+                </a>
+                <a href="#how-it-works" class="px-8 py-4 rounded-full bg-white text-slate-700 font-bold text-lg border border-slate-200 hover:bg-slate-50 transition duration-300">
+                    Como Funciona
+                </a>
+            </div>
+
+            <!-- Mockup Phone -->
+            <div class="mt-20 relative mx-auto w-full max-w-[300px] md:max-w-[800px]">
+                <div class="relative rounded-[2.5rem] border-8 border-slate-900 bg-slate-900 shadow-2xl overflow-hidden aspect-[9/19] md:aspect-auto md:h-[500px] md:w-[280px] mx-auto">
+                    <!-- Screen Content -->
+                    <div class="bg-slate-800 h-full w-full p-4 flex flex-col">
+                        <div class="flex items-center gap-2 mb-6">
+                            <div class="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white font-bold text-xs">IF</div>
+                            <div class="text-white text-sm font-semibold">InsightFlow Finance</div>
+                        </div>
+                        <div class="bg-slate-700/50 p-3 rounded-lg rounded-tl-none text-slate-200 text-xs mb-2">
+                            <p class="font-bold text-green-400 mb-1">🟢 Ibovespa sobe 1.2%</p>
+                            <p>O mercado reagiu bem aos novos dados de inflação...</p>
+                        </div>
+                        <div class="bg-slate-700/50 p-3 rounded-lg rounded-tl-none text-slate-200 text-xs">
+                            <p class="font-bold text-blue-400 mb-1">🤖 Análise IA</p>
+                            <p>Sentimento geral é positivo para varejistas...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Dark Section (Features) -->
+    <section id="how-it-works" class="py-24 bg-slate-900 text-white relative">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold mb-4">Sua vantagem competitiva</h2>
+                <p class="text-slate-400 max-w-2xl mx-auto">Filtramos o barulho das notícias para você focar no que realmente importa para seus investimentos.</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8">
+                <!-- Card 1 -->
+                <div class="glass-card p-8 rounded-3xl hover:bg-white/5 transition duration-300">
+                    <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center mb-6 text-2xl">🤖</div>
+                    <h3 class="text-xl font-bold mb-3">Curadoria via IA</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">
+                        Nosso algoritmo lê InfoMoney, Bloomberg e Brazil Journal, remove duplicatas e resume os pontos chave usando o Gemini Pro.
+                    </p>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="glass-card p-8 rounded-3xl hover:bg-white/5 transition duration-300">
+                    <div class="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center mb-6 text-2xl">💬</div>
+                    <h3 class="text-xl font-bold mb-3">Direto no WhatsApp</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">
+                        Sem apps novos para baixar. Receba seu briefing matinal (07:00) e de fechamento (18:00) onde você já está.
+                    </p>
+                </div>
+
+                 <!-- Card 3 -->
+                 <div class="glass-card p-8 rounded-3xl hover:bg-white/5 transition duration-300">
+                    <div class="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center mb-6 text-2xl">⚡</div>
+                    <h3 class="text-xl font-bold mb-3">Zero Ruído</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">
+                        Formatação limpa, bullet points e indicadores de sentimento (Positivo/Negativo) para leitura em 30 segundos.
+                    </p>
+                </div>
+
+                 <!-- Card 4 -->
+                 <div class="glass-card p-8 rounded-3xl hover:bg-white/5 transition duration-300">
+                    <div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center mb-6 text-2xl">🛡️</div>
+                    <h3 class="text-xl font-bold mb-3">100% Gratuito (Beta)</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">
+                        Estamos em fase MVP. Aproveite para testar a ferramenta sem custo algum enquanto evoluímos.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Subscription Section -->
+    <section id="subscribe" class="py-24 bg-white relative">
+        <div class="container mx-auto px-6">
+            <div class="max-w-4xl mx-auto bg-slate-900 rounded-[3rem] overflow-hidden shadow-2xl flex flex-col md:flex-row">
+                <!-- Form Side -->
+                <div class="p-10 md:p-16 md:w-3/5" x-data="signupForm()">
+                    <h2 class="text-3xl font-bold text-white mb-2">Garanta seu acesso</h2>
+                    <p class="text-slate-400 mb-8 text-sm">Junte-se a investidores que economizam tempo todos os dias.</p>
+                    
+                    <form @submit.prevent="submitForm" class="space-y-5">
+                        <div>
+                            <label class="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Nome Completo</label>
+                            <input x-model="formData.name" type="text" required class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 transition" placeholder="Ex: João Silva">
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">WhatsApp</label>
+                            <input x-model="formData.phone" type="tel" required class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 transition" placeholder="Ex: 11999998888">
+                            <p class="text-xs text-slate-500 mt-1">Com DDD. Nós respeitamos sua privacidade.</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Email</label>
+                            <input x-model="formData.email" type="email" required class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 transition" placeholder="joao@email.com">
+                        </div>
+
+                        <button type="submit" :disabled="loading" class="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold rounded-xl px-4 py-4 hover:shadow-lg hover:opacity-90 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center">
+                            <span x-show="!loading">Inscrever-se Gratuitamente</span>
+                            <span x-show="loading" class="animate-spin ml-2">⚪</span>
+                        </button>
+
+                        <!-- Status Messages -->
+                        <div x-show="success" class="p-4 rounded-xl bg-green-500/20 border border-green-500/50 text-green-400 text-sm text-center">
+                            ✅ Cadastro realizado! Bem-vindo ao InsightFlow.
+                        </div>
+                        <div x-show="error" class="p-4 rounded-xl bg-red-500/20 border border-red-500/50 text-red-400 text-sm text-center" x-text="errorMessage"></div>
+                    </form>
+                </div>
+
+                <!-- Visual Side -->
+                <div class="hidden md:block md:w-2/5 bg-gradient-to-br from-orange-600 to-purple-700 relative overflow-hidden">
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="text-center text-white p-8">
+                            <div class="text-6xl mb-4">📈</div>
+                            <h3 class="text-2xl font-bold mb-2">Start Smarter</h3>
+                            <p class="text-white/80 text-sm">Comece suas manhãs com a informação certa.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="bg-slate-50 py-12 border-t border-slate-200">
+        <div class="container mx-auto px-6 text-center text-slate-500 text-sm">
+            <p>&copy; 2024 InsightFlow Finance. Todos os direitos reservados.</p>
+        </div>
+    </footer>
+
+    <script>
+        function signupForm() {
+            return {
+                loading: false,
+                success: false,
+                error: false,
+                errorMessage: '',
+                formData: {
+                    name: '',
+                    phone: '',
+                    email: ''
+                },
+                async submitForm() {
+                    this.loading = true;
+                    this.error = false;
+                    this.success = false;
+
+                    try {
+                        const response = await fetch('/api/v1/subscribe', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(this.formData)
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            throw new Error(data.detail || 'Erro ao processar inscrição.');
+                        }
+
+                        this.success = true;
+                        this.formData = { name: '', phone: '', email: '' }; // Reset
+                    } catch (e) {
+                        this.error = true;
+                        this.errorMessage = e.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
