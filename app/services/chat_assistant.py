@@ -233,7 +233,17 @@ class ChatAssistantService:
         
         try:
             response = self.model.generate_content(full_prompt, generation_config=generation_config)
+            
+            # Verifica se houve bloqueio por segurança
+            if response.prompt_feedback and response.prompt_feedback.block_reason:
+                logger.warning(f"Resposta bloqueada: {response.prompt_feedback.block_reason}")
+                return "Desculpe, não posso responder a essa mensagem por questões de segurança. Podemos falar sobre notícias de tecnologia ou finanças?"
+            
             return response.text.strip()
+        except ValueError as e:
+            # Erro comum quando o conteúdo é bloqueado e response.text é acessado
+            logger.warning(f"Conteúdo bloqueado ou inválido: {e}")
+            return "Desculpe, não consegui processar sua mensagem adequadamente. Podemos tentar outro assunto?"
         except Exception as e:
             logger.error(f"Erro ao gerar resposta: {e}")
-            return "Desculpe, tive um problema ao processar sua mensagem. Pode tentar novamente?"
+            return "Desculpe, tive um problema técnico ao processar sua mensagem. Pode tentar novamente?"

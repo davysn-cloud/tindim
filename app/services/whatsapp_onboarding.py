@@ -69,6 +69,17 @@ class WhatsAppOnboarding:
             "começar", "comecar", "teste", "quero testar", "menu"
         ]
         
+        # Comandos de debug/teste
+        if message_lower in ["reset", "reiniciar", "debug_reset"]:
+            logger.info(f"Comando de reset recebido de {phone_number}")
+            await self._update_lead_state(
+                phone_number, 
+                OnboardingState.NEW_LEAD,
+                {"is_active": False, "onboarding_data": {}, "plan": "generalista"}
+            )
+            await self._send_text_message(phone_number, "🔄 Estado reiniciado para testes. Envie 'Olá' para começar.")
+            return
+
         # Verifica se é uma mensagem de início
         is_start_message = any(keyword in message_lower for keyword in start_keywords)
         
