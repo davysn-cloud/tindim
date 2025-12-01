@@ -1,5 +1,6 @@
 import logging
 import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from datetime import datetime, timedelta
 from typing import Optional, Dict
 from app.config import settings
@@ -11,7 +12,16 @@ logger = logging.getLogger(__name__)
 class ChatAssistantService:
     def __init__(self):
         genai.configure(api_key=settings.GOOGLE_API_KEY)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        # Configurações de segurança relaxadas para permitir conteúdo de esportes/notícias
+        self.safety_settings = {
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        }
+        
+        self.model = genai.GenerativeModel('gemini-2.0-flash', safety_settings=self.safety_settings)
         self.max_messages_per_conversation = 10
 
     async def process_user_message(self, phone_number: str, user_message: str) -> str:
