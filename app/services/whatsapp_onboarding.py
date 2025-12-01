@@ -492,8 +492,8 @@ class WhatsAppOnboarding:
                 # === DEEP DIVE - Botão para aprofundar ===
                 await self._send_deep_dive_button(phone_number)
                 
-                # === DEMO DE ÁUDIO (para mostrar o plano Estrategista) ===
-                await self._send_audio_demo(phone_number, summaries_by_topic)
+                # === DEMO DE ÁUDIO (desabilitado temporariamente - ElevenLabs bloqueado) ===
+                # await self._send_audio_demo(phone_number, summaries_by_topic)
                 
             else:
                 await self._send_text_message(
