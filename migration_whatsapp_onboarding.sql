@@ -71,20 +71,19 @@ UPDATE public.subscribers
 SET is_active = false 
 WHERE onboarding_state = 'new_lead' OR onboarding_state IS NULL;
 
--- 9. Adiciona constraint de check para onboarding_state
+-- 9. Adiciona constraint de check para onboarding_state (com novo estado selecting_profile)
 DO $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.constraint_column_usage 
-        WHERE constraint_name = 'subscribers_onboarding_state_check'
-    ) THEN
-        ALTER TABLE public.subscribers 
-        ADD CONSTRAINT subscribers_onboarding_state_check 
-        CHECK (onboarding_state IN (
-            'new_lead', 'selecting_interests', 'selecting_tone', 
-            'demo_sent', 'awaiting_payment', 'active'
-        ));
-    END IF;
+    -- Remove constraint antiga se existir
+    ALTER TABLE public.subscribers DROP CONSTRAINT IF EXISTS subscribers_onboarding_state_check;
+    
+    -- Adiciona nova constraint com todos os estados
+    ALTER TABLE public.subscribers 
+    ADD CONSTRAINT subscribers_onboarding_state_check 
+    CHECK (onboarding_state IN (
+        'new_lead', 'selecting_interests', 'selecting_profile', 'selecting_tone', 
+        'demo_sent', 'awaiting_payment', 'active'
+    ));
 EXCEPTION WHEN duplicate_object THEN
     NULL;
 END $$;

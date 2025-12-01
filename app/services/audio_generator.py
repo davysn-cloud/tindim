@@ -215,3 +215,26 @@ class AudioGeneratorService:
                 logger.error(f"Erro ao processar áudio para {sub['name']}: {e}")
         
         logger.info("Broadcast de áudios finalizado.")
+    
+    async def generate_demo_audio(self, headline: str) -> str:
+        """
+        Gera um áudio demo curto (15s) para demonstração no onboarding
+        Retorna a URL do áudio gerado
+        """
+        logger.info(f"Gerando áudio demo para: {headline[:50]}...")
+        
+        # Script curto e impactante para demo
+        demo_script = f"""
+        Bom dia! Aqui é o Tindim, sua IA jornalista.
+        
+        A manchete do momento: {headline}
+        
+        Quer ouvir mais? Assine o plano Estrategista e receba áudios como esse todos os dias!
+        """
+        
+        try:
+            audio_url = await self._text_to_speech(demo_script.strip())
+            return audio_url
+        except Exception as e:
+            logger.error(f"Erro ao gerar áudio demo: {e}")
+            return None
