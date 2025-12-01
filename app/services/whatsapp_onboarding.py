@@ -62,10 +62,26 @@ class WhatsAppOnboarding:
         """
         logger.info(f"Processando mensagem de {phone_number}: {message} (tipo: {message_type})")
         
+        # Palavras-chave que indicam início ou reinício do fluxo
+        message_lower = message.lower().strip()
+        start_keywords = [
+            "olá", "ola", "oi", "tindim", "start", "início", "inicio", 
+            "começar", "comecar", "teste", "quero testar", "menu"
+        ]
+        
+        # Verifica se é uma mensagem de início
+        is_start_message = any(keyword in message_lower for keyword in start_keywords)
+        
         # Busca ou cria lead
         lead = await self._get_or_create_lead(phone_number)
         state = lead.get("onboarding_state", OnboardingState.NEW_LEAD)
         
+        # Se for mensagem de início, força o reinício do onboarding (se não for assinante ativo)
+        if is_start_message and state != OnboardingState.ACTIVE:
+            logger.info(f"Reiniciando onboarding para {phone_number} (Gatilho: {message})")
+            await self._handle_new_lead(phone_number, lead)
+            return
+
         logger.info(f"Lead {phone_number} está no estado: {state}")
         
         # Processa de acordo com o estado
