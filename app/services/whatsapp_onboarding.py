@@ -399,16 +399,26 @@ class WhatsAppOnboarding:
         )
         await asyncio.sleep(1)
         
-        # Busca artigos recentes
+        # Busca artigos recentes (últimas 48h para garantir conteúdo)
         from datetime import timedelta
-        twelve_hours_ago = datetime.now(timezone.utc) - timedelta(hours=12)
+        time_threshold = datetime.now(timezone.utc) - timedelta(hours=48)
         
         articles_response = supabase.table("articles")\
             .select("*")\
-            .gte("processed_at", twelve_hours_ago.isoformat())\
+            .gte("processed_at", time_threshold.isoformat())\
             .order("processed_at", desc=True)\
             .limit(15)\
             .execute()
+        
+        # Fallback: se não houver artigos recentes, pega os mais recentes disponíveis
+        if not articles_response.data:
+            logger.info("Nenhum artigo nas últimas 48h, buscando mais recentes...")
+            articles_response = supabase.table("articles")\
+                .select("*")\
+                .not_.is_("summary_json", "null")\
+                .order("processed_at", desc=True)\
+                .limit(10)\
+                .execute()
         
         # Obtém perfil do usuário para personalizar
         profile = "curioso"
@@ -444,7 +454,7 @@ class WhatsAppOnboarding:
             # Formata mensagem
             if summaries_by_topic:
                 demo_message = "📰 *SEU RESUMO PERSONALIZADO*\n"
-                demo_message += "_Últimas 12 horas_\n\n"
+                demo_message += "_Notícias mais recentes_\n\n"
                 
                 for topic, articles in summaries_by_topic.items():
                     topic_info = next((v for v in INTERESTS_MAP.values() if v["id"] == topic), None)
