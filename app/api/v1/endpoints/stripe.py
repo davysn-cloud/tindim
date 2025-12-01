@@ -181,13 +181,39 @@ async def stripe_webhook(
 # --- Event Handlers ---
 
 async def handle_checkout_completed(session: dict):
-    """Processa checkout completado - Atualiza user E subscriber"""
-    user_id = session.get("metadata", {}).get("user_id")
-    plan = session.get("metadata", {}).get("plan", "generalista")
+    """Processa checkout completado - Atualiza subscriber e notifica via WhatsApp"""
+    metadata = session.get("metadata", {})
+    user_id = metadata.get("user_id")
+    phone_number = metadata.get("phone_number")
+    plan = metadata.get("plan", "generalista")
     subscription_id = session.get("subscription")
     customer_id = session.get("customer")
     
-    if user_id and subscription_id:
+    logger.info(f"Checkout completado: user_id={user_id}, phone={phone_number}, plan={plan}")
+    
+    # Fluxo 1: Checkout via WhatsApp (tem phone_number no metadata)
+    if phone_number:
+        # Atualiza subscriber
+        supabase.table("subscribers")\
+            .update({
+                "stripe_subscription_id": subscription_id,
+                "stripe_customer_id": customer_id,
+                "subscription_status": "trialing",
+                "plan": plan,
+                "is_active": True,
+                "onboarding_state": "active"
+            })\
+            .eq("phone_number", phone_number)\
+            .execute()
+        
+        # Notifica via WhatsApp
+        from app.services.whatsapp_onboarding import whatsapp_onboarding
+        await whatsapp_onboarding.confirm_payment(phone_number, plan)
+        
+        logger.info(f"Subscriber {phone_number} ativado via WhatsApp - Plano: {plan}")
+    
+    # Fluxo 2: Checkout via Site (tem user_id no metadata)
+    elif user_id and subscription_id:
         # 1. Atualiza o user
         user_response = supabase.table("users")\
             .update({
@@ -205,7 +231,11 @@ async def handle_checkout_completed(session: dict):
             subscriber_id = user.get("subscriber_id")
             if subscriber_id:
                 supabase.table("subscribers")\
-                    .update({"plan": plan})\
+                    .update({
+                        "plan": plan,
+                        "is_active": True,
+                        "onboarding_state": "active"
+                    })\
                     .eq("id", subscriber_id)\
                     .execute()
                 logger.info(f"Subscriber {subscriber_id} atualizado para plano {plan}")

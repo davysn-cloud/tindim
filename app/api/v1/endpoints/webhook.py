@@ -2,8 +2,7 @@ from fastapi import APIRouter, Request, Response, HTTPException
 from fastapi.responses import PlainTextResponse
 import logging
 from app.config import settings
-from app.services.chat_assistant import ChatAssistantService
-from app.services.whatsapp import WhatsAppService
+from app.services.whatsapp_onboarding import whatsapp_onboarding
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -62,30 +61,44 @@ async def receive_webhook(request: Request):
                     phone_number = message.get("from")
                     message_type = message.get("type")
                     
-                    # Processar apenas mensagens de texto
-                    if message_type != "text":
-                        logger.info(f"Tipo de mensagem não suportado: {message_type}")
-                        continue
+                    # Extrair conteúdo baseado no tipo
+                    text_content = ""
                     
-                    text_content = message.get("text", {}).get("body", "")
+                    if message_type == "text":
+                        text_content = message.get("text", {}).get("body", "")
+                    
+                    elif message_type == "interactive":
+                        # Resposta de botão interativo
+                        interactive = message.get("interactive", {})
+                        interactive_type = interactive.get("type")
+                        
+                        if interactive_type == "button_reply":
+                            # Clique em botão
+                            text_content = interactive.get("button_reply", {}).get("id", "")
+                        elif interactive_type == "list_reply":
+                            # Seleção de lista
+                            text_content = interactive.get("list_reply", {}).get("id", "")
+                        
+                        logger.info(f"Resposta interativa: {text_content}")
+                    
+                    else:
+                        logger.info(f"Tipo de mensagem: {message_type}")
+                        # Para outros tipos, tenta extrair algum texto
+                        continue
                     
                     if not text_content:
                         continue
                     
-                    logger.info(f"Mensagem de {phone_number}: {text_content}")
+                    logger.info(f"Mensagem de {phone_number}: {text_content} (tipo: {message_type})")
                     
-                    # Processar mensagem com o chat assistant
-                    chat_service = ChatAssistantService()
-                    response_text = await chat_service.process_user_message(
+                    # Processar mensagem com o sistema de onboarding
+                    await whatsapp_onboarding.process_message(
                         phone_number,
-                        text_content
+                        text_content,
+                        message_type
                     )
                     
-                    # Enviar resposta
-                    whatsapp_service = WhatsAppService()
-                    await whatsapp_service.send_text_message(phone_number, response_text)
-                    
-                    logger.info(f"Resposta enviada para {phone_number}")
+                    logger.info(f"Mensagem processada para {phone_number}")
         
         return {"status": "ok"}
         

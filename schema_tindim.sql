@@ -17,18 +17,36 @@ create table if not exists public.articles (
     created_at timestamp with time zone default now()
 );
 
--- 3. Tabela de Assinantes
+-- 3. Tabela de Assinantes (Leads + Assinantes)
 create table if not exists public.subscribers (
     id uuid default uuid_generate_v4() primary key,
     phone_number text not null unique,
     email text unique,
-    name text not null,
-    is_active boolean default true,
-    interests jsonb default '["TECH", "FINANCE"]'::jsonb, -- Tópicos que o usuário escolheu
+    name text not null default 'Lead',
+    is_active boolean default false, -- Só ativa após pagamento
+    interests jsonb default '[]'::jsonb, -- Tópicos que o usuário escolheu
+    tone text default 'casual' check (tone in ('formal', 'casual')), -- Tom preferido
     plan text default 'generalista' check (plan in ('generalista', 'estrategista')), -- Plano do usuário
+    
+    -- Onboarding via WhatsApp
+    onboarding_state text default 'new_lead' check (onboarding_state in (
+        'new_lead', 'selecting_interests', 'selecting_tone', 
+        'demo_sent', 'awaiting_payment', 'active'
+    )),
+    onboarding_data jsonb default '{}'::jsonb, -- Dados temporários do onboarding
+    
+    -- Stripe
+    stripe_customer_id text,
+    stripe_subscription_id text,
+    subscription_status text default 'none' check (subscription_status in (
+        'none', 'trialing', 'active', 'past_due', 'canceled'
+    )),
+    
+    -- Contadores diários
     daily_message_count integer default 0, -- Contador de mensagens do dia
     daily_ai_count integer default 0, -- Contador de uso de IA do dia
     last_reset_at timestamp with time zone default now(), -- Última vez que resetou o contador
+    
     created_at timestamp with time zone default now()
 );
 
