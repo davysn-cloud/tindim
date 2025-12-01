@@ -102,8 +102,8 @@ class WhatsAppOnboarding:
         
         elif state == OnboardingState.ACTIVE:
             # Usuário ativo - passa para o chat assistant normal
-            from app.services.chat_assistant import ChatAssistant
-            assistant = ChatAssistant()
+            from app.services.chat_assistant import ChatAssistantService
+            assistant = ChatAssistantService()
             response = await assistant.process_user_message(phone_number, message)
             await self._send_text_message(phone_number, response)
     
