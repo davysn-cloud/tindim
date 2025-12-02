@@ -1,6 +1,7 @@
 import httpx
 import logging
 import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from datetime import datetime
 from typing import List, Dict
 from app.config import settings
@@ -15,7 +16,16 @@ class AudioGeneratorService:
         self.elevenlabs_voice_id = settings.ELEVENLABS_VOICE_ID
         self.base_url = "https://api.elevenlabs.io/v1"
         genai.configure(api_key=settings.GOOGLE_API_KEY)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        # Configurações de segurança relaxadas para permitir conteúdo de esportes/notícias
+        self.safety_settings = {
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        }
+        
+        self.model = genai.GenerativeModel('gemini-2.0-flash', safety_settings=self.safety_settings)
 
     async def generate_personalized_audio(self, subscriber_id: str) -> str:
         """
@@ -119,10 +129,30 @@ class AudioGeneratorService:
             max_output_tokens=800
         )
         
-        response = self.model.generate_content(prompt, generation_config=generation_config)
-        script = response.text.strip()
+        try:
+            response = self.model.generate_content(prompt, generation_config=generation_config)
+            
+            # Verifica se houve bloqueio por segurança
+            if response.prompt_feedback and response.prompt_feedback.block_reason:
+                logger.warning(f"Script bloqueado por segurança: {response.prompt_feedback.block_reason}")
+                # Gera script genérico de fallback
+                return self._generate_fallback_script(user_name)
+            
+            return response.text.strip()
+        except ValueError as e:
+            logger.warning(f"Erro ao gerar script: {e}")
+            return self._generate_fallback_script(user_name)
+    
+    def _generate_fallback_script(self, user_name: str) -> str:
+        """Gera um script genérico quando o Gemini bloqueia"""
+        return f"""
+        Bom dia, {user_name}! Aqui é o Tindim, sua IA jornalista.
         
-        return script
+        Hoje temos várias notícias importantes para você.
+        Confira os destaques no seu WhatsApp e me pergunte se quiser saber mais sobre algum assunto.
+        
+        Até amanhã!
+        """
 
     async def _text_to_speech(self, text: str) -> str:
         """
