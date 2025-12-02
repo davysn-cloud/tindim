@@ -862,8 +862,8 @@ class WhatsAppOnboarding:
         
         await self._send_text_message(
             phone_number,
-            "Até amanhã às 07:00! 🌅\n\n"
-            "_Dica: você pode alterar horários e preferências a qualquer momento digitando 'configurações'._"
+            "🎁 *Surpresa!* Como é sua primeira vez, vou te enviar um resumo agora mesmo!\n\n"
+            "_Aguarde alguns segundos..._"
         )
         
         await self._update_lead_state(
@@ -871,6 +871,21 @@ class WhatsAppOnboarding:
             OnboardingState.ACTIVE,
             {"is_active": True, "plan": plan}
         )
+        
+        # === ENVIO IMEDIATO DO PRIMEIRO RESUMO (para testes e wow moment) ===
+        await asyncio.sleep(2)
+        
+        try:
+            from app.services.whatsapp import WhatsAppService
+            wa_service = WhatsAppService()
+            await wa_service.send_immediate_digest(phone_number)
+        except Exception as e:
+            logger.error(f"Erro ao enviar resumo imediato: {e}")
+            await self._send_text_message(
+                phone_number,
+                "📰 Seu primeiro resumo chegará em breve!\n\n"
+                "_Dica: você pode alterar preferências digitando 'configurações'._"
+            )
     
     # ==================== ENVIO DE MENSAGENS ====================
     

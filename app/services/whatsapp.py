@@ -283,3 +283,119 @@ class WhatsAppService:
                 logger.error(f"Falha ao enviar áudio: {r.text}")
                 return False
             return True
+
+    async def send_immediate_digest(self, phone_number: str):
+        """
+        Envia resumo imediato para um assinante específico (usado após pagamento)
+        """
+        logger.info(f"Enviando resumo imediato para {phone_number}...")
+        
+        # 1. Buscar dados do assinante
+        sub_response = supabase.table("subscribers").select("*").eq("phone_number", phone_number).execute()
+        if not sub_response.data:
+            logger.error(f"Assinante {phone_number} não encontrado")
+            return False
+        
+        subscriber = sub_response.data[0]
+        interests = subscriber.get("interests", ["TECH", "FINANCE"])
+        if not isinstance(interests, list):
+            interests = ["TECH", "FINANCE"]
+        
+        plan = subscriber.get("plan", "generalista")
+        user_name = subscriber.get("name", "")
+        
+        # 2. Buscar notícias processadas (últimas 48h para garantir conteúdo)
+        time_threshold = datetime.utcnow() - timedelta(hours=48)
+        response = supabase.table("articles")\
+            .select("*")\
+            .gte("processed_at", time_threshold.isoformat())\
+            .not_.is_("summary_json", "null")\
+            .order("processed_at", desc=True)\
+            .limit(20)\
+            .execute()
+        
+        articles = response.data
+        if not articles:
+            # Fallback: pegar os mais recentes disponíveis
+            response = supabase.table("articles")\
+                .select("*")\
+                .not_.is_("summary_json", "null")\
+                .order("processed_at", desc=True)\
+                .limit(15)\
+                .execute()
+            articles = response.data
+        
+        if not articles:
+            await self.send_text_message(
+                phone_number,
+                "📰 Ainda estou coletando as notícias mais recentes para você.\n\n"
+                "Seu primeiro resumo completo chegará em breve!"
+            )
+            return True
+        
+        # 3. Agrupar por categoria
+        articles_by_category: Dict[str, List] = {}
+        for article in articles:
+            category = article.get("category", "GERAL")
+            if category not in articles_by_category:
+                articles_by_category[category] = []
+            articles_by_category[category].append(article)
+        
+        # 4. Enviar mensagem de boas-vindas
+        welcome_msg = (
+            f"📱 *Tindim* - Seu primeiro resumo! 🎉\n\n"
+            f"Olá, *{user_name}*!\n\n"
+            f"Como prometido, aqui está seu resumo personalizado. "
+            f"A partir de amanhã, você receberá às 07:00 e 19:00.\n\n"
+            f"💬 _Responda qualquer mensagem para saber mais!_"
+        )
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            await self._send_message(client, phone_number, welcome_msg)
+            await asyncio.sleep(1.5)
+            
+            messages_sent = 0
+            
+            # 5. Enviar uma mensagem por tópico de interesse
+            for interest in interests:
+                if interest not in articles_by_category:
+                    continue
+                
+                topic_message = self._build_topic_message(interest, articles_by_category[interest])
+                success = await self._send_message(client, phone_number, topic_message)
+                if success:
+                    messages_sent += 1
+                
+                await asyncio.sleep(1.5)
+            
+            # 6. Se for plano estrategista, tentar enviar áudio
+            if plan == "estrategista":
+                await self._try_send_audio(phone_number, subscriber["id"])
+        
+        logger.info(f"Resumo imediato enviado para {phone_number}: {messages_sent} mensagens")
+        return True
+
+    async def _try_send_audio(self, phone_number: str, subscriber_id: str):
+        """Tenta gerar e enviar áudio para assinante estrategista"""
+        try:
+            from app.services.audio_generator import AudioGeneratorService
+            
+            audio_service = AudioGeneratorService()
+            audio_url = await audio_service.generate_personalized_audio(subscriber_id)
+            
+            if audio_url:
+                await self.send_text_message(
+                    phone_number,
+                    "🎧 *Bônus Estrategista:* Aqui está seu resumo em áudio!"
+                )
+                await asyncio.sleep(1)
+                await self.send_audio_message(phone_number, audio_url)
+                logger.info(f"Áudio enviado para {phone_number}")
+            
+        except Exception as e:
+            logger.warning(f"Não foi possível gerar áudio para {phone_number}: {e}")
+            # Não falha silenciosamente - avisa o usuário
+            await self.send_text_message(
+                phone_number,
+                "🎧 _O áudio personalizado estará disponível no próximo resumo!_"
+            )
