@@ -33,20 +33,34 @@ class AudioGeneratorService:
         user_name = subscriber["name"]
         interests = subscriber.get("interests", ["TECH", "FINANCE"])
         
-        # 2. Buscar notícias relevantes das últimas 24h
+        # 2. Buscar notícias relevantes (últimas 48h para garantir conteúdo)
         from datetime import timedelta
-        time_threshold = datetime.utcnow() - timedelta(hours=24)
+        time_threshold = datetime.utcnow() - timedelta(hours=48)
         
         articles_response = supabase.table("articles")\
             .select("*")\
             .gte("processed_at", time_threshold.isoformat())\
             .not_.is_("summary_json", "null")\
             .in_("category", interests)\
+            .order("processed_at", desc=True)\
+            .limit(10)\
             .execute()
         
         articles = articles_response.data
+        
+        # Fallback: se não houver artigos dos interesses, pega os mais recentes
         if not articles:
-            logger.info(f"Nenhuma notícia relevante para {user_name}")
+            logger.info(f"Sem artigos dos interesses de {user_name}, buscando mais recentes...")
+            articles_response = supabase.table("articles")\
+                .select("*")\
+                .not_.is_("summary_json", "null")\
+                .order("processed_at", desc=True)\
+                .limit(8)\
+                .execute()
+            articles = articles_response.data
+        
+        if not articles:
+            logger.info(f"Nenhuma notícia disponível para {user_name}")
             return None
         
         # 3. Gerar roteiro com IA
