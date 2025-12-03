@@ -1,11 +1,27 @@
-from fastapi import APIRouter, Request, Response, HTTPException
+from fastapi import APIRouter, Request, Response, HTTPException, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 import logging
+import asyncio
+from datetime import datetime, timedelta
+from typing import Set
 from app.config import settings
 from app.services.whatsapp_onboarding import whatsapp_onboarding
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Cache de mensagens processadas para evitar duplicação
+# Formato: {message_id: timestamp}
+_processed_messages: dict = {}
+_processing_lock = asyncio.Lock()
+
+# Limpa mensagens antigas a cada 5 minutos
+async def _cleanup_old_messages():
+    """Remove mensagens processadas há mais de 5 minutos"""
+    cutoff = datetime.utcnow() - timedelta(minutes=5)
+    to_remove = [mid for mid, ts in _processed_messages.items() if ts < cutoff]
+    for mid in to_remove:
+        _processed_messages.pop(mid, None)
 
 @router.get("/whatsapp")
 async def verify_webhook(request: Request):
@@ -29,7 +45,7 @@ async def verify_webhook(request: Request):
         raise HTTPException(status_code=403, detail="Forbidden")
 
 @router.post("/whatsapp")
-async def receive_webhook(request: Request):
+async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     """
     Recebe mensagens do WhatsApp
     Processa mensagens de usuários e responde via chat assistant
@@ -37,6 +53,9 @@ async def receive_webhook(request: Request):
     try:
         body = await request.json()
         logger.info(f"Webhook recebido: {body}")
+        
+        # Limpa mensagens antigas em background
+        background_tasks.add_task(_cleanup_old_messages)
         
         # Verificar se é uma mensagem
         if "entry" not in body:
@@ -57,6 +76,16 @@ async def receive_webhook(request: Request):
                     continue
                 
                 for message in value["messages"]:
+                    # === DEDUPLICAÇÃO: Verifica se já processamos esta mensagem ===
+                    message_id = message.get("id")
+                    if message_id:
+                        async with _processing_lock:
+                            if message_id in _processed_messages:
+                                logger.info(f"Mensagem {message_id} já processada, ignorando duplicata")
+                                continue
+                            # Marca como processada ANTES de processar
+                            _processed_messages[message_id] = datetime.utcnow()
+                    
                     # Extrair dados da mensagem
                     phone_number = message.get("from")
                     message_type = message.get("type")
@@ -82,8 +111,8 @@ async def receive_webhook(request: Request):
                         logger.info(f"Resposta interativa: {text_content}")
                     
                     else:
-                        logger.info(f"Tipo de mensagem: {message_type}")
-                        # Para outros tipos, tenta extrair algum texto
+                        logger.info(f"Tipo de mensagem não suportado: {message_type}")
+                        # Para outros tipos, ignora
                         continue
                     
                     if not text_content:
@@ -92,13 +121,15 @@ async def receive_webhook(request: Request):
                     logger.info(f"Mensagem de {phone_number}: {text_content} (tipo: {message_type})")
                     
                     # Processar mensagem com o sistema de onboarding
-                    await whatsapp_onboarding.process_message(
+                    # Executa em background para responder rápido ao WhatsApp
+                    background_tasks.add_task(
+                        whatsapp_onboarding.process_message,
                         phone_number,
                         text_content,
                         message_type
                     )
                     
-                    logger.info(f"Mensagem processada para {phone_number}")
+                    logger.info(f"Mensagem enfileirada para processamento: {phone_number}")
         
         return {"status": "ok"}
         
