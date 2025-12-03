@@ -252,14 +252,14 @@ class WhatsAppOnboarding:
         
         await self._send_text_message(phone_number, welcome)
         
-        # Envia botões de interesses (em grupos de 3, limite do WhatsApp)
-        await self._send_interest_buttons(phone_number, page=1)
+        # Envia lista de interesses (todos de uma vez)
+        await self._send_interests_list(phone_number)
         
         # Atualiza estado
         await self._update_lead_state(
             phone_number, 
             OnboardingState.SELECTING_INTERESTS,
-            {"onboarding_data": {"selected_interests": [], "interests_page": 1}}
+            {"onboarding_data": {"selected_interests": []}}
         )
     
     async def _handle_interest_selection(self, phone_number: str, lead: Dict, message: str) -> None:
@@ -276,13 +276,14 @@ class WhatsAppOnboarding:
                 selected.append(interest["id"])
                 
                 if len(selected) < 3:
-                    # Confirma e mostra botão de gerar resumo - Tom witty
+                    # Confirma e pergunta se quer mais
                     await self._send_text_message(
                         phone_number,
-                        f"✅ *{interest['label']}* anotado! ({len(selected)}/3)\n\n"
-                        "Quer mais algum tema ou já tá bom assim?"
+                        f"✅ *{interest['label']}* anotado! ({len(selected)}/3)"
                     )
-                    await self._send_interest_buttons_with_generate(phone_number, exclude=selected)
+                    
+                    # Mostra botões rápidos: mais temas ou continuar
+                    await self._send_continue_or_more_buttons(phone_number, len(selected))
                     
                     # Atualiza dados
                     onboarding_data["selected_interests"] = selected
@@ -305,17 +306,18 @@ class WhatsAppOnboarding:
                     phone_number,
                     "Por favor, selecione pelo menos 1 tema para continuar."
                 )
+                await self._send_interests_list(phone_number)
         
         elif message_lower == "mais":
-            # Mostra mais opções
-            await self._send_interest_buttons(phone_number, page=2, exclude=selected)
+            # Mostra lista completa novamente
+            await self._send_interests_list(phone_number, exclude=selected)
         
         else:
             await self._send_text_message(
                 phone_number,
-                "Opa, não peguei essa 😅 Clica num dos botões aí!"
+                "Opa, não peguei essa 😅 Escolhe da lista aí!"
             )
-            await self._send_interest_buttons(phone_number, page=1, exclude=selected)
+            await self._send_interests_list(phone_number, exclude=selected)
     
     async def _advance_to_profile_selection(self, phone_number: str, interests: List[str]) -> None:
         """Avança para micro-profiling após seleção de interesses"""
@@ -1335,8 +1337,108 @@ class WhatsAppOnboarding:
         
         return await self._send_message(payload)
     
+    async def _send_interests_list(self, phone_number: str, exclude: List[str] = None) -> bool:
+        """
+        Envia List Message com todos os temas disponíveis.
+        Permite seleção rápida sem múltiplas mensagens.
+        """
+        exclude = exclude or []
+        
+        # Agrupa interesses por categoria
+        rows = []
+        for key, value in INTERESTS_MAP.items():
+            if value["id"] not in exclude:
+                rows.append({
+                    "id": key,
+                    "title": f"{value['emoji']} {value['label']}"[:24],  # Limite de 24 chars
+                    "description": self._get_interest_description(key)[:72]  # Limite de 72 chars
+                })
+        
+        if not rows:
+            await self._send_text_message(
+                phone_number,
+                "Você já selecionou todos os temas disponíveis! Digite *pronto* para continuar."
+            )
+            return True
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": phone_number,
+            "type": "interactive",
+            "interactive": {
+                "type": "list",
+                "header": {
+                    "type": "text",
+                    "text": "📰 Escolha seus temas"
+                },
+                "body": {
+                    "text": "Toque no botão abaixo para ver todos os temas disponíveis e escolher os que te interessam."
+                },
+                "footer": {
+                    "text": "Máximo 3 temas • Você pode mudar depois"
+                },
+                "action": {
+                    "button": "Ver Temas",
+                    "sections": [
+                        {
+                            "title": "Temas Disponíveis",
+                            "rows": rows[:10]  # Limite de 10 itens por seção
+                        }
+                    ]
+                }
+            }
+        }
+        
+        return await self._send_message(payload)
+    
+    def _get_interest_description(self, interest_key: str) -> str:
+        """Retorna descrição curta para cada interesse"""
+        descriptions = {
+            "tech": "Startups, apps, gadgets e inovação",
+            "finance": "Bolsa, investimentos e economia",
+            "crypto": "Bitcoin, altcoins e blockchain",
+            "politics": "Governo, eleições e políticas públicas",
+            "sports": "Futebol, NBA, F1 e mais",
+            "health": "Medicina, bem-estar e ciência",
+            "entertainment": "Filmes, séries, música e cultura",
+            "business": "Empresas, empreendedorismo e gestão",
+            "world": "Notícias internacionais",
+            "lifestyle": "Tendências, viagens e gastronomia"
+        }
+        return descriptions.get(interest_key, "Notícias e atualizações")
+    
+    async def _send_continue_or_more_buttons(self, phone_number: str, selected_count: int) -> bool:
+        """Envia botões para continuar ou adicionar mais temas"""
+        remaining = 3 - selected_count
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": phone_number,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "body": {
+                    "text": f"Quer adicionar mais {remaining} tema{'s' if remaining > 1 else ''} ou tá bom assim?"
+                },
+                "action": {
+                    "buttons": [
+                        {
+                            "type": "reply",
+                            "reply": {"id": "mais", "title": f"➕ Mais temas"}
+                        },
+                        {
+                            "type": "reply",
+                            "reply": {"id": "pronto", "title": "🚀 Tá ótimo!"}
+                        }
+                    ]
+                }
+            }
+        }
+        
+        return await self._send_message(payload)
+    
     async def _send_interest_buttons(self, phone_number: str, page: int = 1, exclude: List[str] = None) -> bool:
-        """Envia botões de seleção de interesses"""
+        """Envia botões de seleção de interesses (fallback para List Message)"""
         exclude = exclude or []
         
         # Filtra interesses não selecionados
