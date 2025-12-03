@@ -28,10 +28,14 @@ create table if not exists public.subscribers (
     tone text default 'casual' check (tone in ('formal', 'casual')), -- Tom preferido
     plan text default 'generalista' check (plan in ('generalista', 'estrategista')), -- Plano do usuário
     
+    -- Configurações de horário
+    preferred_times jsonb default '["07:00", "19:00"]'::jsonb, -- Horários preferidos para receber resumos
+    
     -- Onboarding via WhatsApp
     onboarding_state text default 'new_lead' check (onboarding_state in (
-        'new_lead', 'selecting_interests', 'selecting_tone', 
-        'demo_sent', 'awaiting_payment', 'active'
+        'new_lead', 'selecting_interests', 'selecting_profile', 'selecting_tone', 
+        'demo_sent', 'awaiting_payment', 'active', 
+        'configuring', 'config_schedule', 'config_interests'
     )),
     onboarding_data jsonb default '{}'::jsonb, -- Dados temporários do onboarding
     

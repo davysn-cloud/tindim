@@ -144,14 +144,15 @@ class AudioGeneratorService:
             return self._generate_fallback_script(user_name)
     
     def _generate_fallback_script(self, user_name: str) -> str:
-        """Gera um script genérico quando o Gemini bloqueia"""
+        """Gera um script genérico quando o Gemini bloqueia - Tom witty"""
         return f"""
-        Bom dia, {user_name}! Aqui é o Tindim, sua IA jornalista.
+        Fala, {user_name}! Tudo certo? Aqui é o Tindim.
         
-        Hoje temos várias notícias importantes para você.
-        Confira os destaques no seu WhatsApp e me pergunte se quiser saber mais sobre algum assunto.
+        Olha, hoje tem bastante coisa rolando. Dá uma olhada nas mensagens que te mandei no WhatsApp.
         
-        Até amanhã!
+        Se quiser saber mais sobre alguma notícia, é só me chamar!
+        
+        Falou!
         """
 
     async def _text_to_speech(self, text: str) -> str:

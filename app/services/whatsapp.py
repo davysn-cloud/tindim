@@ -109,13 +109,20 @@ class WhatsAppService:
         logger.info("Broadcast finalizado.")
 
     def _build_welcome_message(self, user_name: str) -> str:
-        """Mensagem de boas-vindas do dia"""
+        """Mensagem de boas-vindas do dia - Tom witty"""
+        # Variações de saudação baseadas no horário
+        hour = datetime.now().hour
+        if hour < 12:
+            greeting = f"Fala, *{user_name}*! ☕ Bora ver o que rolou?"
+        elif hour < 18:
+            greeting = f"E aí, *{user_name}*! 👋 Olha só o que tá bombando:"
+        else:
+            greeting = f"Fala, *{user_name}*! 🌙 Fecha o dia por dentro de tudo:"
+        
         return (
             f"📱 *Tindim* - {datetime.now().strftime('%d/%m/%Y')}\n\n"
-            f"Bom dia, *{user_name}*! ☀️\n\n"
-            f"Aqui estão suas notícias personalizadas de hoje. "
-            f"Cada tópico será enviado em uma mensagem separada para facilitar a leitura.\n\n"
-            f"💬 _Responda qualquer mensagem para saber mais!_"
+            f"{greeting}\n\n"
+            f"💬 _Me chama se quiser saber mais sobre alguma notícia!_"
         )
 
     def _build_topic_message(self, category: str, articles: List[Dict]) -> str:
@@ -132,14 +139,29 @@ class WhatsAppService:
             "ENTERTAINMENT": "🎬",
             "HEALTH": "🏥",
             "SCIENCE": "🔬",
+            "WORLD": "🌍",
+            "LIFESTYLE": "🍷",
             "GERAL": "📰"
         }
         
         emoji = category_emojis.get(category, "📰")
         msg = f"{emoji} *{category}*\n\n"
         
+        # Filtrar artigos com erro e ordenar por relevância
+        valid_articles = []
+        for article in articles:
+            summary = article.get("summary_json", {})
+            if isinstance(summary, dict) and "error" not in summary:
+                valid_articles.append(article)
+        
+        # Ordenar por score de relevância (maior primeiro)
+        valid_articles.sort(
+            key=lambda x: x.get("summary_json", {}).get("relevance_score", 50),
+            reverse=True
+        )
+        
         # Limita a 3 artigos por tópico
-        for article in articles[:3]:
+        for article in valid_articles[:3]:
             summary = article.get("summary_json", {})
             if not isinstance(summary, dict):
                 summary = {}
@@ -150,14 +172,24 @@ class WhatsAppService:
                 points = [str(points)]
                 
             sentiment = summary.get("sentiment", "NEUTRO")
-            icon = "🟢" if sentiment == "POSITIVO" else "🔴" if sentiment == "NEGATIVO" else "⚪"
+            
+            # Reações emocionais baseadas no sentimento - Brand Guidelines
+            if sentiment == "POSITIVO":
+                icon = "🟢"
+                reaction = ""
+            elif sentiment == "NEGATIVO":
+                icon = "🔴"
+                reaction = ""
+            else:
+                icon = "⚪"
+                reaction = ""
             
             msg += f"{icon} *{headline}*\n"
             for p in points[:2]:  # Limita a 2 pontos por artigo
                 msg += f"• {p}\n"
             msg += "\n"
         
-        msg += f"_🤖 Gerado por IA via Tindim_"
+        msg += f"_— Tindim 🤖_"
         return msg
 
     async def _send_message(self, client: httpx.AsyncClient, phone_number: str, message: str) -> bool:
@@ -206,7 +238,9 @@ class WhatsAppService:
             "SPORTS": "⚽",
             "ENTERTAINMENT": "🎬",
             "HEALTH": "🏥",
-            "SCIENCE": "🔬"
+            "SCIENCE": "🔬",
+            "WORLD": "🌍",
+            "LIFESTYLE": "🍷"
         }
         
         # Montar blocos por categoria
@@ -341,7 +375,7 @@ class WhatsAppService:
                 articles_by_category[category] = []
             articles_by_category[category].append(article)
         
-        # 4. Enviar mensagem de boas-vindas
+        # 4. Enviar mensagem de boas-vindas - Tom witty
         welcome_msg = (
             f"📱 *Tindim* - Seu primeiro resumo! 🎉\n\n"
             f"Olá, *{user_name}*!\n\n"
