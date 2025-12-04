@@ -126,6 +126,19 @@ class WhatsAppOnboarding:
             )
             await self._send_text_message(phone_number, "🔄 Estado reiniciado para testes. Envie 'Olá' para começar.")
             return
+        
+        # === COMANDOS ESPECIAIS (bug report, sugestões) ===
+        bug_commands = ["/bug", "!erro", "/erro", "!bug", "reportar bug", "reportar erro"]
+        if any(cmd in message_lower for cmd in bug_commands):
+            lead = await self._get_or_create_lead(phone_number)
+            await self._handle_bug_report(phone_number, lead, message)
+            return
+        
+        idea_commands = ["/ideia", "!ideia", "/sugestao", "!sugestao", "/sugestão"]
+        if any(cmd in message_lower for cmd in idea_commands):
+            lead = await self._get_or_create_lead(phone_number)
+            await self._handle_feature_request(phone_number, lead, message)
+            return
 
         # Busca ou cria lead
         lead = await self._get_or_create_lead(phone_number)
@@ -1669,6 +1682,134 @@ class WhatsAppOnboarding:
         except Exception as e:
             logger.error(f"Erro ao enviar mensagem: {e}")
             return False
+    
+    # ==================== HANDLERS DE FEEDBACK ====================
+    
+    async def _handle_bug_report(self, phone_number: str, lead: Dict, message: str) -> None:
+        """
+        Processa report de bug do usuário.
+        Comandos: /bug, !erro, /erro, !bug
+        """
+        from app.services.feedback import feedback_service
+        from app.services.analytics import analytics
+        
+        # Remove comando da mensagem
+        description = message
+        for cmd in ["/bug", "!erro", "/erro", "!bug", "reportar bug", "reportar erro"]:
+            description = description.lower().replace(cmd, "").strip()
+        
+        # Se não tem descrição, pede mais detalhes
+        if not description or len(description) < 3:
+            await self._send_text_message(
+                phone_number,
+                "🐛 *Reportar Bug*\n\n"
+                "Me conta o que aconteceu de errado?\n\n"
+                "_Exemplo: /bug A mensagem de boas-vindas não apareceu_"
+            )
+            return
+        
+        # Busca últimas mensagens para contexto
+        recent_messages = await self._get_recent_messages(lead["id"], limit=5)
+        
+        # Salva o bug report
+        await feedback_service.save_bug_report(
+            subscriber_id=lead["id"],
+            description=description,
+            context={
+                "user_state": lead.get("onboarding_state"),
+                "user_plan": lead.get("plan"),
+                "recent_messages": recent_messages,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        )
+        
+        # Tracking
+        await analytics.track_event(lead["id"], "bug_reported", {"description": description[:100]})
+        
+        # Confirmação
+        await self._send_text_message(
+            phone_number,
+            f"🐛 *Bug reportado!*\n\n"
+            f"Obrigado por me ajudar a melhorar! Vou investigar isso.\n\n"
+            f"_Descrição: {description[:100]}{'...' if len(description) > 100 else ''}_\n\n"
+            "Se quiser adicionar mais detalhes, é só mandar!"
+        )
+        
+        logger.info(f"Bug report de {phone_number}: {description[:50]}...")
+    
+    async def _handle_feature_request(self, phone_number: str, lead: Dict, message: str) -> None:
+        """
+        Processa sugestão de feature do usuário.
+        Comandos: /ideia, !ideia, /sugestao, !sugestao
+        """
+        from app.services.feedback import feedback_service
+        from app.services.analytics import analytics
+        
+        # Remove comando da mensagem
+        description = message
+        for cmd in ["/ideia", "!ideia", "/sugestao", "!sugestao", "/sugestão"]:
+            description = description.lower().replace(cmd, "").strip()
+        
+        # Se não tem descrição, pede mais detalhes
+        if not description or len(description) < 3:
+            await self._send_text_message(
+                phone_number,
+                "💡 *Sugerir Feature*\n\n"
+                "Qual sua ideia? Adoraria ouvir!\n\n"
+                "_Exemplo: /ideia Quero receber notícias sobre esportes_"
+            )
+            return
+        
+        # Salva a sugestão
+        await feedback_service.save_feature_request(
+            subscriber_id=lead["id"],
+            description=description
+        )
+        
+        # Tracking
+        await analytics.track_event(lead["id"], "feature_requested", {"description": description[:100]})
+        
+        # Confirmação
+        await self._send_text_message(
+            phone_number,
+            f"💡 *Ideia anotada!*\n\n"
+            f"Adoro sugestões! Vou analisar com carinho.\n\n"
+            f"_Sugestão: {description[:100]}{'...' if len(description) > 100 else ''}_\n\n"
+            "Obrigado por ajudar a construir o Tindim! 🚀"
+        )
+        
+        logger.info(f"Feature request de {phone_number}: {description[:50]}...")
+    
+    async def _get_recent_messages(self, subscriber_id: str, limit: int = 5) -> List[Dict]:
+        """Busca últimas mensagens do usuário para contexto"""
+        try:
+            # Busca conversa ativa
+            conv_response = supabase.table("conversations")\
+                .select("id")\
+                .eq("subscriber_id", subscriber_id)\
+                .eq("is_active", True)\
+                .order("created_at", desc=True)\
+                .limit(1)\
+                .execute()
+            
+            if not conv_response.data:
+                return []
+            
+            conv_id = conv_response.data[0]["id"]
+            
+            # Busca mensagens
+            msg_response = supabase.table("messages")\
+                .select("role, content, created_at")\
+                .eq("conversation_id", conv_id)\
+                .order("created_at", desc=True)\
+                .limit(limit)\
+                .execute()
+            
+            return msg_response.data or []
+            
+        except Exception as e:
+            logger.error(f"Error getting recent messages: {e}")
+            return []
 
 
 # Instância global

@@ -29,26 +29,29 @@ class ChatAssistantService:
         Processa uma mensagem do usuário e retorna a resposta do assistente
         Gerencia o limite de 10 mensagens por conversa
         """
+        from app.services.rate_limiter import rate_limiter
+        from app.services.analytics import analytics
+        
         logger.info(f"Processando mensagem de {phone_number}: {user_message}")
         
         # 1. Buscar ou criar assinante
         subscriber = await self._get_or_create_subscriber(phone_number)
         
-        # 2. Verificar limite diário de IA
-        plan = subscriber.get("plan", "generalista")
-        if not await self._check_daily_limit(subscriber):
-            if plan == "generalista":
-                return (
-                    "Você atingiu o limite de interações com IA por hoje (10/dia no plano Generalista). 😊\n\n"
-                    "💡 *Dica:* Faça upgrade para o plano *Estrategista* e tenha 30 interações/dia!\n"
-                    "Volte amanhã para mais conversas!"
-                )
-            return "Você atingiu o limite de interações com IA por hoje. Volte amanhã para mais conversas! 😊"
+        # 2. Verificar rate limit de IA
+        allowed, limit_message = await rate_limiter.check_limit(subscriber["id"], "ai")
+        if not allowed:
+            return limit_message
         
-        # 3. Buscar ou criar conversa ativa
+        # 3. Incrementar contador de uso
+        await rate_limiter.increment_counter(subscriber["id"], "ai")
+        
+        # 4. Tracking de evento
+        await analytics.track_message(subscriber["id"], "sent", "text", user_message[:50])
+        
+        # 5. Buscar ou criar conversa ativa
         conversation = await self._get_or_create_conversation(subscriber["id"])
         
-        # 4. Verificar limite de mensagens na conversa
+        # 6. Verificar limite de mensagens na conversa
         if conversation["message_count"] >= self.max_messages_per_conversation:
             # Encerrar conversa atual
             supabase.table("conversations")\
@@ -58,19 +61,19 @@ class ChatAssistantService:
             
             return "Você atingiu o limite de 10 mensagens nesta conversa. Envie uma nova mensagem para começar um novo tópico! 💬"
         
-        # 5. Salvar mensagem do usuário
+        # 7. Salvar mensagem do usuário
         await self._save_message(conversation["id"], "user", user_message)
         
-        # 6. Buscar contexto (histórico + artigos relevantes)
+        # 8. Buscar contexto (histórico + artigos relevantes)
         context = await self._build_context(conversation, subscriber, user_message)
         
-        # 7. Gerar resposta com IA
+        # 9. Gerar resposta com IA
         assistant_response = await self._generate_response(context, user_message)
         
-        # 8. Salvar resposta do assistente
+        # 10. Salvar resposta do assistente
         await self._save_message(conversation["id"], "assistant", assistant_response)
         
-        # 9. Atualizar contador de mensagens
+        # 11. Atualizar contador de mensagens
         new_count = conversation["message_count"] + 2  # user + assistant
         supabase.table("conversations")\
             .update({
@@ -80,7 +83,7 @@ class ChatAssistantService:
             .eq("id", conversation["id"])\
             .execute()
         
-        # 10. Adicionar contador de mensagens restantes
+        # 12. Adicionar contador de mensagens restantes
         remaining = self.max_messages_per_conversation - new_count
         if remaining <= 3 and remaining > 0:
             assistant_response += f"\n\n_({remaining} mensagens restantes nesta conversa)_"
@@ -107,48 +110,6 @@ class ChatAssistantService:
         
         result = supabase.table("subscribers").insert(new_sub).execute()
         return result.data[0]
-
-    async def _check_daily_limit(self, subscriber: Dict) -> bool:
-        """Verifica se o usuário ainda tem uso de IA disponível no dia (por plano)"""
-        from datetime import timezone
-        
-        # Reset diário do contador
-        last_reset = subscriber.get("last_reset_at")
-        if last_reset:
-            last_reset_date = datetime.fromisoformat(last_reset.replace('Z', '+00:00'))
-            now_utc = datetime.now(timezone.utc)
-            if (now_utc - last_reset_date).days >= 1:
-                # Resetar contadores
-                supabase.table("subscribers")\
-                    .update({
-                        "daily_message_count": 0,
-                        "daily_ai_count": 0,
-                        "last_reset_at": datetime.utcnow().isoformat()
-                    })\
-                    .eq("id", subscriber["id"])\
-                    .execute()
-                return True
-        
-        # Limites por plano
-        plan = subscriber.get("plan", "generalista")
-        if plan == "estrategista":
-            daily_ai_limit = 30  # Estrategista: 30 interações IA/dia
-        else:
-            daily_ai_limit = 10  # Generalista: 10 interações IA/dia
-        
-        current_ai_count = subscriber.get("daily_ai_count", 0)
-        
-        if current_ai_count >= daily_ai_limit:
-            logger.info(f"Limite de IA atingido para {subscriber['phone_number']} (plano: {plan})")
-            return False
-        
-        # Incrementar contador de IA
-        supabase.table("subscribers")\
-            .update({"daily_ai_count": current_ai_count + 1})\
-            .eq("id", subscriber["id"])\
-            .execute()
-        
-        return True
 
     async def _get_or_create_conversation(self, subscriber_id: str) -> Dict:
         """Busca conversa ativa ou cria uma nova"""
